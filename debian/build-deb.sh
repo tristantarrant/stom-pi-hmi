@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+BUILD_DIR="$PROJECT_DIR/build/flutter-pi/aarch64-generic"
+VERSION=$(head -1 "$SCRIPT_DIR/changelog" | grep -oP '\(([^)]+)\)' | tr -d '()')
+PKG_NAME="stom-pi-hmi_${VERSION}_arm64"
+STAGE_DIR="$PROJECT_DIR/build/$PKG_NAME"
+
+if [ ! -d "$BUILD_DIR" ]; then
+    echo "Build directory not found: $BUILD_DIR"
+    echo "Run 'flutterpi_tool build --release --arch=arm64' first."
+    exit 1
+fi
+
+echo "Staging package $PKG_NAME..."
+
+rm -rf "$STAGE_DIR"
+
+# Control files
+mkdir -p "$STAGE_DIR/DEBIAN"
+MAINTAINER=$(grep '^Maintainer:' "$SCRIPT_DIR/control" | head -1)
+sed -n '/^Package: stom-pi-hmi$/,/^$/p' "$SCRIPT_DIR/control" \
+  | grep -v 'misc:Depends' \
+  | sed '/^Depends:/{N;s/Depends:\s*\n\s*/Depends: /}' \
+  > "$STAGE_DIR/DEBIAN/control"
+# Add required fields
+sed -i "/^Architecture:/a Version: $VERSION" "$STAGE_DIR/DEBIAN/control"
+grep -q '^Maintainer:' "$STAGE_DIR/DEBIAN/control" || sed -i "/^Version:/a $MAINTAINER" "$STAGE_DIR/DEBIAN/control"
+cp "$SCRIPT_DIR/stom-pi-hmi.postinst" "$STAGE_DIR/DEBIAN/postinst"
+cp "$SCRIPT_DIR/stom-pi-hmi.prerm" "$STAGE_DIR/DEBIAN/prerm"
+cp "$SCRIPT_DIR/stom-pi-hmi.postrm" "$STAGE_DIR/DEBIAN/postrm"
+chmod 755 "$STAGE_DIR/DEBIAN/postinst" "$STAGE_DIR/DEBIAN/prerm" "$STAGE_DIR/DEBIAN/postrm"
+
+# Application bundle
+mkdir -p "$STAGE_DIR/usr/lib/stom-pi-hmi"
+cp -a "$BUILD_DIR"/. "$STAGE_DIR/usr/lib/stom-pi-hmi/"
+
+# Wrapper script
+mkdir -p "$STAGE_DIR/usr/bin"
+cp "$SCRIPT_DIR/stom-pi-hmi.sh" "$STAGE_DIR/usr/bin/stom-pi-hmi"
+chmod 755 "$STAGE_DIR/usr/bin/stom-pi-hmi"
+
+# Systemd service
+mkdir -p "$STAGE_DIR/lib/systemd/system"
+cp "$SCRIPT_DIR/stom-pi-hmi.service" "$STAGE_DIR/lib/systemd/system/"
+
+# ld.so config for libflutter_engine.so
+mkdir -p "$STAGE_DIR/etc/ld.so.conf.d"
+cp "$SCRIPT_DIR/stom-pi-hmi.conf" "$STAGE_DIR/etc/ld.so.conf.d/"
+
+# Calculate installed size (in KB)
+SIZE=$(du -sk "$STAGE_DIR" | awk '{print $1}')
+sed -i "/^Architecture:/a Installed-Size: $SIZE" "$STAGE_DIR/DEBIAN/control"
+
+echo "Building .deb..."
+dpkg-deb --root-owner-group --build "$STAGE_DIR" "$PROJECT_DIR/build/$PKG_NAME.deb"
+
+echo "Built: build/$PKG_NAME.deb"

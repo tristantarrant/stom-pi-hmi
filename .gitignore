@@ -1,0 +1,14 @@
+.idea
+build
+/.dart_tool/
+*.iml
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/stom-pi-hmi.substvars
+debian/stom-pi-hmi.postrm.debhelper
+debian/stom-pi-hmi/
+debian/stom-pi-hmi-desktop/
+debian/stom-pi-hmi-desktop.substvars
+debian/stom-pi-hmi-desktop.debhelper.log
+debian/stom-pi-hmi-desktop.postrm.debhelper

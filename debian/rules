@@ -1,0 +1,64 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+ifneq (,$(filter desktop,$(DEB_BUILD_PROFILES)))
+
+# === Desktop build: Flutter Linux (GTK) ===
+
+override_dh_auto_build:
+	flutter build linux --release
+
+override_dh_auto_install:
+	mkdir -p debian/stom-pi-hmi-desktop/usr/lib/stom-pi-hmi
+	cp -a build/linux/*/release/bundle/. debian/stom-pi-hmi-desktop/usr/lib/stom-pi-hmi/
+	install -D -m 755 debian/stom-pi-hmi-desktop.sh debian/stom-pi-hmi-desktop/usr/bin/stom-pi-hmi
+	install -D -m 644 debian/stom-pi-hmi-desktop.desktop debian/stom-pi-hmi-desktop/usr/share/applications/stom-pi-hmi.desktop
+	install -D -m 644 debian/stom-pi-hmi-desktop.conf debian/stom-pi-hmi-desktop/etc/ld.so.conf.d/stom-pi-hmi.conf
+
+override_dh_strip:
+	dh_strip
+
+override_dh_dwz:
+	dh_dwz
+
+override_dh_shlibdeps:
+	dh_shlibdeps
+
+override_dh_makeshlibs:
+	dh_makeshlibs
+
+else
+
+# === Pi build: Flutter-Pi (EGL/DRM) ===
+
+override_dh_auto_build:
+	flutterpi_tool build --release --arch=arm64
+
+override_dh_auto_install:
+	mkdir -p debian/stom-pi-hmi/usr/lib/stom-pi-hmi
+	cp -a build/flutter-pi/aarch64-generic/. debian/stom-pi-hmi/usr/lib/stom-pi-hmi/
+	install -D -m 755 debian/stom-pi-hmi.sh debian/stom-pi-hmi/usr/bin/stom-pi-hmi
+	install -D -m 644 debian/stom-pi-hmi.service debian/stom-pi-hmi/usr/lib/systemd/system/stom-pi-hmi.service
+	install -D -m 644 debian/stom-pi-hmi.conf debian/stom-pi-hmi/etc/ld.so.conf.d/stom-pi-hmi.conf
+
+override_dh_strip:
+	# Skip stripping pre-built arm64 binaries
+
+override_dh_dwz:
+	# Skip dwz on pre-built binaries
+
+override_dh_shlibdeps:
+	# Skip shared library dependency detection for cross-built binaries
+
+override_dh_makeshlibs:
+	# Skip shared library detection for cross-built binaries
+
+endif
+
+override_dh_auto_test:
+	# Skip tests during build
+
+override_dh_auto_clean:
+	# Intentionally not cleaning build artifacts to allow incremental builds.
